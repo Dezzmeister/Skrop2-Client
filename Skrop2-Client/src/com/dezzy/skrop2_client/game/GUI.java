@@ -12,6 +12,8 @@ import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -21,7 +23,9 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.Timer;
 
+import com.dezzy.skrop2_client.assets.Config;
 import com.dezzy.skrop2_client.assets.Fonts;
+import com.dezzy.skrop2_client.net.tcp.Client;
 
 public class GUI extends JFrame implements ComponentListener, MouseListener {
 	
@@ -30,12 +34,15 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	 */
 	private static final long serialVersionUID = -4348592485678370253L;
 	
-	private final JPanel mainMenuButtons;
-	private final JPanel mainMenuBackground;
+	private final MainMenuButtons mainMenuButtons;
+	private final MainMenuBackground mainMenuBackground;
 	private World mainMenuBackgroundWorld;
 	private int points = 0;
 	
-	private final JPanel joinMenu;
+	private final JoinMenu joinMenu;
+	
+	private Client tcpClient;
+	private Thread tcpThread;
 	
 	private GameState gameState = GameState.MAIN_MENU;
 	public GUI(int width, int height) {
@@ -62,6 +69,48 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		
 		ActionListener gameTickListener = e -> gameTick();
 		new Timer(60, gameTickListener).start();
+	}
+	
+	private String serverName = "";
+	private int gamePort = -1;
+	
+	public void processServerEvent(final String event) {
+		String header = event.substring(0, event.indexOf(" "));
+		String body = event.substring(event.indexOf(" ") + 1);
+		
+		System.out.println(event);
+		
+		if (gameState == GameState.JOINING_GAME) {
+			if (header.equals("server-info")) {
+				String[] fields = body.split(" ");
+				
+				for (String field : fields) {
+					String fieldHeader = field.substring(0, field.indexOf(":"));
+					String fieldBody = field.substring(field.indexOf(":") + 1);
+					
+					if (fieldHeader.equals("name")) {
+						serverName = fieldBody;
+					} else if (fieldHeader.equals("game-running")) {
+						if (fieldBody.equals("false")) {
+							tcpClient.sendString("quit");
+							gameState = GameState.JOIN_MENU;
+							updateGameState();
+							postStatus("No game running on this server!", Color.YELLOW, 0.5f, 0.4f);
+						} else {
+							tcpClient.sendString("join-game");
+						}
+					}
+				}
+			} else if (header.equals("port")) {
+				gamePort = Integer.parseInt(body);
+				tcpClient.sendString("quit");
+				tcpClient.stop();
+				tcpClient.waitUntilStopped();
+				
+				gameState = GameState.WAITING_FOR_GAME_START;
+				updateGameState();
+			}
+		}
 	}
 	
 	@Override
@@ -91,6 +140,8 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		switch (gameState) {
 		case MAIN_MENU:
 		case JOIN_MENU:
+		case JOINING_GAME:
+		case WAITING_FOR_GAME_START:
 			mainMenuBackgroundWorld.update();
 			mainMenuBackground.repaint();
 			break;
@@ -99,14 +150,97 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		}
 	}
 	
+	private String status = "";
+	private Color statusColor = Color.RED;
+	private boolean showStatus = false;
+	private float statusXPos = 0;
+	private float statusYPos = 0;
+	
 	private void updateGameState() {
+		showStatus = false;
+		
 		switch(gameState) {
 		case JOIN_MENU:
 			remove(mainMenuButtons);
 			add(joinMenu, BorderLayout.PAGE_END);
 			revalidate();
 			break;
+		case JOINING_GAME:
+			remove(joinMenu);
+			postStatus("Connecting to infoserver...", Color.BLUE, 0.5f, 0.4f);
+			revalidate();
+			try {
+				tcpClient = new Client(this, joinMenu.ipEntry(), Integer.parseInt(joinMenu.portEntry())); //IP and port have already been validated
+				tcpThread = new Thread(tcpClient);
+				tcpThread.start();
+				tcpClient.sendString("server-info-request");
+			} catch (Exception e) {				
+				gameState = GameState.JOIN_MENU;
+				updateGameState();
+				postStatus("Connection failed!", Color.RED, 0.5f, 0.4f);
+				
+				e.printStackTrace();
+			}
+		case WAITING_FOR_GAME_START:
+			try {
+				tcpClient = new Client(this, joinMenu.ipEntry(), gamePort);
+				tcpThread = new Thread(tcpClient);
+				tcpThread.start();
+				tcpClient.sendString("init-player name:" + Config.name + " color:" + Config.color);
+			} catch (Exception e) {
+				gameState = GameState.JOIN_MENU;
+				updateGameState();
+				postStatus("Connection failed!", Color.RED, 0.5f, 0.4f);
+				
+				e.printStackTrace();
+			}
 		}
+	}
+	
+	private void postStatus(final String _status, final Color _statusColor, float _statusXPos, float _statusYPos) {
+		status = _status;
+		statusColor = _statusColor;
+		statusXPos = _statusXPos;
+		statusYPos = _statusYPos;
+		showStatus = true;
+	}
+	
+	/**
+	 * Returns true if the IP address is a valid IP address.
+	 * 
+	 * @param ip String to be validated
+	 * @return true if <code>ip</code> is a valid IP address
+	 */
+	private boolean validateIP(final String ip) {
+		String expression = "(\\d{1,3}[\\.]){3}\\d{1,3}";
+		Pattern pattern = Pattern.compile(expression);
+		Matcher matcher = pattern.matcher(ip);
+		
+		return (matcher.find() && ip.equals(matcher.group(0))) || ip.equals("localhost");
+	}
+	
+	/**
+	 * Returns true if the String is a valid port (5 digit int).
+	 * 
+	 * @param port String entry to be tested
+	 * @return true if <code>port</code> is a valid TCP port number
+	 */
+	private int validatePort(final String port) {
+		int out = -1;
+		
+		try {
+			out = Integer.parseInt(port);
+			
+			if (port.length() > 5 || out > 65535 || out <= 0) {
+				System.err.println("Enter a valid port number!");
+				return -1;
+			}
+		} catch (Exception e) {
+			System.err.println("Enter a valid port number!");
+			e.printStackTrace();
+		}
+		
+		return out;
 	}
 	
 	private class JoinMenu extends JPanel {
@@ -136,6 +270,22 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			
 			join = new JButton("Join");
 			join.setFont(harambe40);
+			join.addActionListener(e -> {
+				statusXPos = 0.5f;
+				statusYPos = 0.4f;
+				statusColor = Color.RED;
+				
+				if (!validateIP(ipEntry())) {
+					status = "Not a valid IP!";
+					showStatus = true;
+				} else if (validatePort(portEntry()) == -1) {
+					status = "Not a valid port!";
+					showStatus = true;
+				} else {
+					gameState = GameState.JOINING_GAME;
+					updateGameState();
+				}
+			});
 			join.setAlignmentX(CENTER_ALIGNMENT);
 			
 			add(infoserverIP);
@@ -146,6 +296,14 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			add(Box.createRigidArea(new Dimension(0, 15)));
 			
 			setOpaque(false);
+		}
+		
+		private String ipEntry() {
+			return infoserverIP.getText();
+		}
+		
+		private String portEntry() {
+			return infoserverPort.getText();
 		}
 		
 	}
@@ -188,6 +346,13 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			g.setFont(harambe100);
 			
 			placeTextAt("SKROP 2", getWidth()/2, getHeight()/16, g);
+			
+			if (showStatus) {
+				g.setColor(statusColor);
+				g.setFont(harambe40);
+				
+				placeTextAt(status, (int)(statusXPos * getWidth()), (int)(statusYPos * getHeight()), g);
+			}
 		}
 	}
 	
@@ -232,7 +397,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			
 			join = new JButton("Join");
 			join.setFont(harambe40);
-			join.addActionListener(e -> {
+			join.addActionListener(e -> {				
 				gameState = GameState.JOIN_MENU;
 				updateGameState();
 			});
@@ -259,6 +424,8 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		switch (gameState) {
 		case MAIN_MENU:
 		case JOIN_MENU:
+		case JOINING_GAME:
+		case WAITING_FOR_GAME_START:
 			int pointsReceived = mainMenuBackgroundWorld.checkClick(e.getX()/(float)getWidth(), e.getY()/(float)getHeight());
 			points += pointsReceived;
 			break;
