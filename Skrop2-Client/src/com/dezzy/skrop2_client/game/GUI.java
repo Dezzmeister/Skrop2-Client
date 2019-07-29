@@ -18,6 +18,7 @@ import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.JTextField;
 import javax.swing.Timer;
 
 import com.dezzy.skrop2_client.assets.Fonts;
@@ -101,7 +102,10 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	private void updateGameState() {
 		switch(gameState) {
 		case JOIN_MENU:
-			
+			remove(mainMenuButtons);
+			add(joinMenu, BorderLayout.PAGE_END);
+			revalidate();
+			break;
 		}
 	}
 	
@@ -112,6 +116,37 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		 */
 		private static final long serialVersionUID = -5507894302357476220L;
 		
+		private final Font harambe40;
+		
+		private final JTextField infoserverIP;
+		private final JTextField infoserverPort;
+		private final JButton join;
+		
+		private JoinMenu() {
+			harambe40 = Fonts.HARAMBE_8.deriveFont(Font.PLAIN, 40);
+			setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+			
+			infoserverIP = new JTextField("Infoserver IP", 15);
+			infoserverIP.setFont(harambe40);
+			infoserverIP.setAlignmentX(CENTER_ALIGNMENT);
+			
+			infoserverPort = new JTextField("Infoserver Port", 5);
+			infoserverPort.setFont(harambe40);
+			infoserverPort.setAlignmentX(CENTER_ALIGNMENT);
+			
+			join = new JButton("Join");
+			join.setFont(harambe40);
+			join.setAlignmentX(CENTER_ALIGNMENT);
+			
+			add(infoserverIP);
+			add(Box.createRigidArea(new Dimension(0, 15)));
+			add(infoserverPort);
+			add(Box.createRigidArea(new Dimension(0, 15)));
+			add(join);
+			add(Box.createRigidArea(new Dimension(0, 15)));
+			
+			setOpaque(false);
+		}
 		
 	}
 	
