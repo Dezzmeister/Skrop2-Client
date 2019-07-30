@@ -12,6 +12,8 @@ import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,10 +43,16 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	
 	private final JoinMenu joinMenu;
 	
+	private final ClientController clientController;
+	private final Thread clientControllerThread;
 	private Client tcpClient;
 	private Thread tcpThread;
 	
+	private Game game;
+	
 	private GameState gameState = GameState.MAIN_MENU;
+	
+	
 	public GUI(int width, int height) {
 		super("Skrop 2");
 		setSize(width, height);
@@ -69,13 +77,17 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		
 		ActionListener gameTickListener = e -> gameTick();
 		new Timer(60, gameTickListener).start();
+		
+		clientController = new ClientController(this);
+		clientControllerThread = new Thread(clientController, "Skrop 2 Client Controller Thread");
+		clientControllerThread.start();
 	}
 	
 	private String serverName = "";
 	private int gamePort = -1;
 	
 	public void processServerEvent(final String event) {
-		String header = event.substring(0, event.indexOf(" "));
+		String header = event.contains(" ") ? event.substring(0, event.indexOf(" ")) : event;
 		String body = event.substring(event.indexOf(" ") + 1);
 		
 		System.out.println(event);
@@ -97,18 +109,54 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 							updateGameState();
 							postStatus("No game running on this server!", Color.YELLOW, 0.5f, 0.4f);
 						} else {
-							tcpClient.sendString("join-game");
+							tcpClient.sendString("game-info-request");
 						}
 					}
 				}
+			} else if (header.equals("game-info")) {
+				game = new Game(body);
+				tcpClient.sendString("join-game");
 			} else if (header.equals("port")) {
 				gamePort = Integer.parseInt(body);
+				
 				tcpClient.sendString("quit");
 				tcpClient.stop();
-				tcpClient.waitUntilStopped();
+				
+				try {
+					tcpThread.join();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
 				
 				gameState = GameState.WAITING_FOR_GAME_START;
 				updateGameState();
+			} else if (header.equals("game-full")) {
+				tcpClient.sendString("quit");
+				tcpClient.stop();
+				
+				try {
+					tcpThread.join();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				
+				gameState = GameState.JOIN_MENU;
+				updateGameState();
+				postStatus("Game is full!", Color.YELLOW, 0.5f, 0.4f);
+			}
+		} else if (gameState == GameState.WAITING_FOR_GAME_START) {
+			if (header.equals("player-list")) {
+				List<Player> players = new ArrayList<Player>();
+				String[] fields = body.split(" ");
+				
+				for (int i = 0; i < fields.length - 1; i += 2) {
+					String name = fields[i].substring(fields[i].indexOf(":") + 1);
+					Color color = new Color(Integer.parseInt(fields[i + 1].substring(fields[i + 1].indexOf(":") + 1)));
+					
+					players.add(new Player(name, color));
+				}
+				
+				game.players = players.toArray(new Player[players.size()]);
 			}
 		}
 	}
@@ -170,8 +218,8 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			postStatus("Connecting to infoserver...", Color.BLUE, 0.5f, 0.4f);
 			revalidate();
 			try {
-				tcpClient = new Client(this, joinMenu.ipEntry(), Integer.parseInt(joinMenu.portEntry())); //IP and port have already been validated
-				tcpThread = new Thread(tcpClient);
+				tcpClient = new Client(clientController, joinMenu.ipEntry(), Integer.parseInt(joinMenu.portEntry())); //IP and port have already been validated
+				tcpThread = new Thread(tcpClient, "Skrop 2 TCP Client Thread");
 				tcpThread.start();
 				tcpClient.sendString("server-info-request");
 			} catch (Exception e) {				
@@ -181,10 +229,12 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				
 				e.printStackTrace();
 			}
+			break;
 		case WAITING_FOR_GAME_START:
+			
 			try {
-				tcpClient = new Client(this, joinMenu.ipEntry(), gamePort);
-				tcpThread = new Thread(tcpClient);
+				tcpClient = new Client(clientController, joinMenu.ipEntry(), gamePort);
+				tcpThread = new Thread(tcpClient, "Skrop 2 TCP Client Thread");
 				tcpThread.start();
 				tcpClient.sendString("init-player name:" + Config.name + " color:" + Config.color);
 			} catch (Exception e) {
@@ -194,6 +244,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				
 				e.printStackTrace();
 			}
+			break;
 		}
 	}
 	
@@ -299,11 +350,13 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		}
 		
 		private String ipEntry() {
-			return infoserverIP.getText();
+			//return infoserverIP.getText();
+			return "localhost";
 		}
 		
 		private String portEntry() {
-			return infoserverPort.getText();
+			//return infoserverPort.getText();
+			return "30200";
 		}
 		
 	}
@@ -335,6 +388,20 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				
 				g2.setColor(new Color(r.color));
 				g2.fillRect(xPos - (int)(r.size/2.0f * getWidth()), yPos - (int)(r.size/2.0f * getHeight()), (int)(r.size * getWidth()), (int)(r.size * getHeight()));
+			}
+			
+			if (gameState == GameState.WAITING_FOR_GAME_START) {
+				g2.setFont(harambe40);
+				
+				if (game != null && game.players != null) {
+					for (int i = 0; i < game.players.length; i++) {
+						g2.setColor(game.players[i].color);
+						placeTextAt(game.players[i].name, getWidth()/16, (getHeight()/16) + ((i + 1) * 50), g);
+					}
+					
+					g2.setColor(Color.BLUE);
+					placeTextAt(game.players.length + "/" + game.maxPlayers, getWidth()/16, (getHeight()/16) + ((game.players.length + 2) * 50), g);
+				}
 			}
 			
 			g.setColor(Color.RED);
