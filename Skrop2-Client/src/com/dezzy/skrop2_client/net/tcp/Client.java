@@ -71,6 +71,10 @@ public class Client implements Runnable {
 		sendMessage = true;
 	}
 	
+	public boolean sendingMessage() {
+		return sendMessage;
+	}
+	
 	public void stop() {
 		isRunning = false;
 	}

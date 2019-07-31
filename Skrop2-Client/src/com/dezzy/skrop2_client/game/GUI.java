@@ -114,6 +114,13 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		
 		System.out.println(event);
 		
+		if (header.equals("timeout")) {
+			postStatus("You have timed out!", Color.RED, 0.5f, 0.4f);
+			gameState = GameState.MAIN_MENU;
+			updateGameState();
+			return;
+		}
+		
 		if (gameState == GameState.JOINING_GAME) {
 			if (header.equals("server-info")) {
 				String[] fields = body.split(" ");
@@ -263,6 +270,15 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	public void componentHidden(ComponentEvent e) {
 		// TODO Auto-generated method stub
 		
+	}
+	
+	/**
+	 * Tries to ping the server so that the server does not think the client has disconnected.
+	 */
+	public synchronized void notifyServer() {
+		if (tcpClient != null && tcpClient.isRunning() && !tcpClient.sendingMessage()) {
+			tcpClient.sendString("ping");
+		}
 	}
 	
 	public void gameTick() {
