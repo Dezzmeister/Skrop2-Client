@@ -40,5 +40,7 @@ public class Config {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		
+		name = "Player " + (int)(Math.random() * 1000);
 	}
 }

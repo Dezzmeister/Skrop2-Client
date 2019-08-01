@@ -1,13 +1,34 @@
 package com.dezzy.skrop2_client.game;
 
-public class Game {
+import java.awt.Color;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.io.ByteArrayInputStream;
+import java.io.ObjectInputStream;
+import java.util.Base64;
+
+import javax.swing.JPanel;
+
+import com.dezzy.skrop2_server.game.skrop2.Rectangle;
+import com.dezzy.skrop2_server.game.skrop2.World;
+
+public class Game extends JPanel {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -2618455596875194889L;
+	
 	public Player[] players;
 	public final String gameName;
 	public final SkropWinCondition winCondition;
 	public final int winConditionArg;
 	public final int maxPlayers;
 	
+	public World gameWorld;
+	
 	public Game(final String gameCreationInfo) {
+		setLayout(null);
+		
 		String tempGameName = "Skrop 2 Game";
 		SkropWinCondition tempWinCondition = SkropWinCondition.FIRST_TO_X_POINTS;
 		int tempWinConditionArg = 500;
@@ -36,5 +57,38 @@ public class Game {
 		winCondition = tempWinCondition;
 		winConditionArg = tempWinConditionArg;
 		maxPlayers = tempMaxPlayers;
+	}
+	
+	@Override
+	public void paintComponent(Graphics g) {
+		Graphics2D g2 = (Graphics2D) g;
+		g2.setColor(Color.BLACK);
+		g2.fillRect(0, 0, getWidth(), getHeight());
+		
+		if (gameWorld != null) {
+			for (Rectangle r : gameWorld.rects) {
+				int xPos = (int)(r.x() * getWidth());
+				int yPos = (int)(r.y() * getHeight());
+				
+				g2.setColor(new Color(r.color()));
+				g2.fillRect(xPos - (int)(r.size()/2.0f * getWidth()), yPos - (int)(r.size()/2.0f * getHeight()), (int)(r.size() * getWidth()), (int)(r.size() * getHeight()));
+			}
+		}
+	}
+	
+	public void setGameWorld(final String serializedWorld) {
+		byte[] bytes = Base64.getDecoder().decode(serializedWorld);
+	
+		try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+			 ObjectInputStream ois = new ObjectInputStream(bais)) {
+			gameWorld = (World) ois.readObject();
+		} catch (Exception e) {
+			System.err.println("Error parsing game information from the UDP server!");
+			e.printStackTrace();
+		}
+	}
+	
+	public synchronized void invalidateGameWorld() {
+		gameWorld = null;
 	}
 }

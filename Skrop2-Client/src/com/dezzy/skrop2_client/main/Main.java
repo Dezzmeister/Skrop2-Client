@@ -21,7 +21,7 @@ public class Main {
 			public void run() {
 				gameGUI.notifyServer();
 			}
-		}, 0, 750);		
+		}, 0, 1500);		
 	}
 
 }

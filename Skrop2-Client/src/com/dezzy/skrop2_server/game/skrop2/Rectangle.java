@@ -1,4 +1,4 @@
-package com.dezzy.skrop2_client.game;
+package com.dezzy.skrop2_server.game.skrop2;
 
 import java.io.Serializable;
 
@@ -52,6 +52,22 @@ public class Rectangle implements Serializable {
 				}
 			}
 		}
+	}
+	
+	public float x() {
+		return x;
+	}
+	
+	public float y() {
+		return y;
+	}
+	
+	public float size() {
+		return size;
+	}
+	
+	public int color() {
+		return color;
 	}
 	
 	public boolean isDead() {

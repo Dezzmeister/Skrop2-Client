@@ -1,4 +1,4 @@
-package com.dezzy.skrop2_client.game;
+package com.dezzy.skrop2_server.game.skrop2;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

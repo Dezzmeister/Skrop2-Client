@@ -45,6 +45,8 @@ import com.dezzy.skrop2_client.assets.Config;
 import com.dezzy.skrop2_client.assets.Fonts;
 import com.dezzy.skrop2_client.net.tcp.Client;
 import com.dezzy.skrop2_client.net.udp.UDPClient;
+import com.dezzy.skrop2_server.game.skrop2.Rectangle;
+import com.dezzy.skrop2_server.game.skrop2.World;
 
 public class GUI extends JFrame implements ComponentListener, MouseListener {
 	
@@ -123,7 +125,12 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	private int udpExceptions = 0;
 	
 	public void processUDPServerEvent(final String event) {
-		System.out.println(event);
+		
+		if (gameState == GameState.IN_GAME) {
+			if (game != null) {
+				game.setGameWorld(event);
+			}
+		}
 	}
 	
 	public void processServerEvent(final String event) {
@@ -209,6 +216,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				String messageBody = body.substring(body.indexOf(":") + 1).replace('_', ' ');
 				Color color = Color.WHITE;
 				
+				System.out.println("game.players.length: " + game.players.length);
 				for (Player player : game.players) {
 					if (player.name.equals(playerName)) {
 						color = player.color;
@@ -236,6 +244,11 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 						udpExceptions = 0;
 					}
 				}
+			} else if (header.equals("countdown-timer")) {
+				postStatus(body, Color.GREEN, 0.5f, 0.3f);
+			} else if (header.equals("game-begin")) {
+				gameState = GameState.IN_GAME;
+				updateGameState();
 			}
 		} else if (gameState == GameState.HOSTING_GAME) {
 			if (header.equals("server-info")) {
@@ -306,6 +319,8 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				updateGameState();
 				postStatus("Game is full!", Color.YELLOW, 0.5f, 0.4f);
 			}
+		} else if (gameState == GameState.IN_GAME) {
+			
 		}
 	}
 	
@@ -352,6 +367,11 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			mainMenuBackgroundWorld.update();
 			mainMenuBackground.repaint();
 			break;
+		case IN_GAME:
+			if (game != null) {
+				game.repaint();
+			}
+			break;
 		default:
 			break;
 		}
@@ -368,6 +388,10 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		
 		switch(gameState) {
 		case MAIN_MENU:
+			if (game != null) {
+				setContentPane(mainMenuBackground);
+				getContentPane().setLayout(new BorderLayout());
+			}
 			remove(joinMenu);
 			remove(hostMenu);
 			remove(lobbyMenu);
@@ -427,6 +451,10 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			}
 			break;
 		case WAITING_FOR_GAME_START:
+			if (game != null) {
+				setContentPane(mainMenuBackground);
+				getContentPane().setLayout(new BorderLayout());
+			}
 			add(lobbyMenu, BorderLayout.PAGE_END);
 			revalidate();
 			
@@ -438,7 +466,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				tcpClient = new Client(clientController, gameIP, gamePort);
 				tcpThread = new Thread(tcpClient, "Skrop 2 TCP Client Thread");
 				tcpThread.start();
-				tcpClient.sendString("init-player name:" + Config.name + " color:" + Config.color);
+				tcpClient.sendString("init-player name:" + Config.name.replace(' ', '_') + " color:" + Config.color);
 			} catch (Exception e) {
 				gameState = GameState.MAIN_MENU;
 				updateGameState();
@@ -446,6 +474,12 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				
 				e.printStackTrace();
 			}
+			break;
+		case IN_GAME:
+			remove(lobbyMenu);
+			setContentPane(game);
+			getContentPane().setLayout(new BorderLayout());
+			revalidate();
 			break;
 		}
 	}
@@ -897,11 +931,11 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			g2.fillRect(0, 0, getWidth(), getHeight());
 			
 			for (Rectangle r : mainMenuBackgroundWorld.rects) {
-				int xPos = (int)(r.x * getWidth());
-				int yPos = (int)(r.y * getHeight());
+				int xPos = (int)(r.x() * getWidth());
+				int yPos = (int)(r.y() * getHeight());
 				
-				g2.setColor(new Color(r.color));
-				g2.fillRect(xPos - (int)(r.size/2.0f * getWidth()), yPos - (int)(r.size/2.0f * getHeight()), (int)(r.size * getWidth()), (int)(r.size * getHeight()));
+				g2.setColor(new Color(r.color()));
+				g2.fillRect(xPos - (int)(r.size()/2.0f * getWidth()), yPos - (int)(r.size()/2.0f * getHeight()), (int)(r.size() * getWidth()), (int)(r.size() * getHeight()));
 			}
 			
 			if (gameState == GameState.WAITING_FOR_GAME_START) {
@@ -1014,6 +1048,12 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		case WAITING_FOR_GAME_START:
 			int pointsReceived = mainMenuBackgroundWorld.checkClick(e.getX()/(float)getWidth(), e.getY()/(float)getHeight());
 			points += pointsReceived;
+			break;
+		case IN_GAME:
+			float x = e.getX()/(float)getWidth();
+			float y = e.getY()/(float)getHeight();
+			
+			tcpClient.sendString("c " + x + ":" + y);
 			break;
 		default:
 			break;
