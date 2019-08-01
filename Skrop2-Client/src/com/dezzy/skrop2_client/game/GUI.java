@@ -10,6 +10,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
@@ -32,9 +33,14 @@ import javax.swing.JFormattedTextField;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTextField;
+import javax.swing.JTextPane;
 import javax.swing.Timer;
 import javax.swing.text.NumberFormatter;
+import javax.swing.text.Style;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
 
 import com.dezzy.skrop2_client.assets.Config;
 import com.dezzy.skrop2_client.assets.Fonts;
@@ -50,6 +56,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	private final Font harambe40;
 	private final Font harambe32;
 	private final Font harambe20;
+	private final Font harambe18;
 	
 	private final MainMenuButtons mainMenuButtons;
 	private final MainMenuBackground mainMenuBackground;
@@ -58,6 +65,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	
 	private final JoinMenu joinMenu;
 	private final HostMenu hostMenu;
+	private final LobbyMenu lobbyMenu;
 	
 	private final ClientController clientController;
 	private final Thread clientControllerThread;
@@ -75,6 +83,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		harambe40 = Fonts.HARAMBE_8.deriveFont(Font.PLAIN, 40);
 		harambe32 = Fonts.HARAMBE_8.deriveFont(Font.PLAIN, 32);
 		harambe20 = Fonts.HARAMBE_8.deriveFont(Font.PLAIN, 20);
+		harambe18 = Fonts.HARAMBE_8.deriveFont(Font.PLAIN, 18);
 		
 		setSize(width, height);
 		setLayout(new BorderLayout());
@@ -92,6 +101,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		
 		joinMenu = new JoinMenu();
 		hostMenu = new HostMenu();
+		lobbyMenu = new LobbyMenu();
 		
 		setVisible(true);
 		setResizable(true);
@@ -186,6 +196,19 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				}
 				
 				game.players = players.toArray(new Player[players.size()]);
+			} else if (header.equals("chat-message")) {
+				String playerName = body.substring(0, body.indexOf(":"));
+				String messageBody = body.substring(body.indexOf(":") + 1).replace('_', ' ');
+				Color color = Color.WHITE;
+				
+				for (Player player : game.players) {
+					if (player.name.equals(playerName)) {
+						color = player.color;
+					}
+				}
+				
+				lobbyMenu.addColoredText(playerName + ": ", color);
+				lobbyMenu.addColoredText(messageBody + "\r\n", Color.WHITE);
 			}
 		} else if (gameState == GameState.HOSTING_GAME) {
 			if (header.equals("server-info")) {
@@ -310,22 +333,27 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		case MAIN_MENU:
 			remove(joinMenu);
 			remove(hostMenu);
+			remove(lobbyMenu);
 			add(mainMenuButtons, BorderLayout.PAGE_END);
 			break;
 		case JOIN_MENU:
 			remove(mainMenuButtons);
+			remove(lobbyMenu);
 			add(joinMenu, BorderLayout.PAGE_END);
 			revalidate();
 			break;
 		case HOST_MENU:
 			remove(mainMenuButtons);
+			remove(lobbyMenu);
 			add(hostMenu, BorderLayout.PAGE_END);
 			revalidate();
 			break;
 		case JOINING_GAME:
 			remove(joinMenu);
+			remove(lobbyMenu);
 			postStatus("Connecting to infoserver...", Color.BLUE, 0.5f, 0.4f);
 			revalidate();
+			
 			try {
 				tcpClient = new Client(clientController, joinMenu.fields.ipEntry(), joinMenu.fields.portEntry()); //IP and port have already been validated
 				tcpThread = new Thread(tcpClient, "Skrop 2 TCP Client Thread");
@@ -341,6 +369,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			break;
 		case HOSTING_GAME:
 			remove(hostMenu);
+			remove(lobbyMenu);
 			postStatus("Connecting to infoserver...", Color.BLUE, 0.5f, 0.4f);
 			revalidate();
 			
@@ -358,6 +387,8 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			}
 			break;
 		case WAITING_FOR_GAME_START:
+			add(lobbyMenu, BorderLayout.PAGE_END);
+			revalidate();
 			
 			try {
 				tcpClient = new Client(clientController, joinMenu.fields.ipEntry(), gamePort);
@@ -365,7 +396,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				tcpThread.start();
 				tcpClient.sendString("init-player name:" + Config.name + " color:" + Config.color);
 			} catch (Exception e) {
-				gameState = GameState.JOIN_MENU;
+				gameState = GameState.MAIN_MENU;
 				updateGameState();
 				postStatus("Connection failed!", Color.RED, 0.5f, 0.4f);
 				
@@ -395,6 +426,79 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		Matcher matcher = pattern.matcher(ip);
 		
 		return (matcher.find() && ip.equals(matcher.group(0))) || ip.equals("localhost");
+	}
+	
+	private class LobbyMenu extends JPanel {
+		
+		/**
+		 * 
+		 */
+		private static final long serialVersionUID = -8356051872909873883L;
+		
+		private final JPanel chatWindow;
+		private final JScrollPane chatScrollPane;
+		private final JTextPane chatPane;
+		
+		private final JPanel chatBarPanel;
+		private final JTextField chatBar;
+		private final JButton send;
+		
+		private LobbyMenu() {
+			setLayout(new BorderLayout());
+			setOpaque(false);
+			
+			chatPane = new JTextPane();
+			chatPane.setPreferredSize(new Dimension(400, 200));
+			chatPane.setFont(harambe18);
+			chatPane.setBackground(new Color(50, 50, 50));
+			chatPane.setForeground(Color.WHITE);
+			chatPane.setEditable(false);
+			
+			chatScrollPane = new JScrollPane(chatPane);
+			
+			chatBar = new JTextField(37);
+			chatBar.setFont(harambe18);
+			
+			ActionListener sendMessageListener = a -> {
+				
+				if (tcpClient != null) {
+					tcpClient.sendString("chat-message " + chatBar.getText().replace(' ', '_'));
+					chatBar.setText("");
+				}
+			};
+			chatBar.addActionListener(sendMessageListener);
+			
+			send = new JButton("Send");
+			send.setFont(harambe18);
+			send.addActionListener(sendMessageListener);
+			
+			chatBarPanel = new JPanel();
+			chatBarPanel.setLayout(new FlowLayout());
+			chatBarPanel.add(chatBar);
+			chatBarPanel.add(send);
+			
+			chatWindow = new JPanel();
+			chatWindow.setLayout(new BorderLayout());
+			chatWindow.setOpaque(false);
+			
+			chatWindow.add(chatBarPanel, BorderLayout.PAGE_END);
+			chatWindow.add(chatScrollPane, BorderLayout.CENTER);
+			
+			add(chatWindow, BorderLayout.LINE_END);
+		}
+		
+		private void addColoredText(final String text, final Color color) {
+			StyledDocument doc = chatPane.getStyledDocument();
+			
+			Style style = chatPane.addStyle("Color " + color.getRGB(), null);
+			StyleConstants.setForeground(style, color);
+			
+			try {
+				doc.insertString(doc.getLength(), text, style);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
 	}
 	
 	private class HostMenu extends JPanel {
@@ -457,7 +561,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			maxPlayersLabel.setForeground(Color.BLUE);
 			maxPlayersLabel.setLabelFor(maxPlayers);
 			
-			winConditionPanel = new JPanel();
+			winConditionPanel = new JPanel();			
 			winConditionPanel.setLayout(new FlowLayout());
 			winConditionPanel.setOpaque(false);
 			winConditionPanel.setAlignmentX(CENTER_ALIGNMENT);
@@ -547,10 +651,12 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			gameInfoFields.add(winConditionLabel, infoserverFields.left);
 			
 			gameInfoFields.add(winConditionAlignmentPanel, infoserverFields.right);
+			gameInfoFields.add(infoserverFields.infoserverIPLabel, infoserverFields.left);
+			gameInfoFields.add(infoserverFields.infoserverIP, infoserverFields.right);
+			gameInfoFields.add(infoserverFields.infoserverPortLabel, infoserverFields.left);
+			gameInfoFields.add(infoserverFields.infoserverPort, infoserverFields.right);
 			
 			add(gameInfoFields);
-			add(Box.createRigidArea(new Dimension(0, 15)));
-			add(infoserverFields);
 			add(Box.createRigidArea(new Dimension(0, 15)));
 			add(host);
 			add(Box.createRigidArea(new Dimension(0, 5)));

@@ -13,7 +13,6 @@ public class Main {
 		Config.loadConfig("assets/config/config.txt");
 		Fonts.registerFonts();
 		
-		//@SuppressWarnings("unused")
 		GUI gameGUI = new GUI(1000, 1000);
 		
 		Timer timer = new Timer();
@@ -22,7 +21,7 @@ public class Main {
 			public void run() {
 				gameGUI.notifyServer();
 			}
-		}, 0, 250);
+		}, 0, 750);		
 	}
 
 }
