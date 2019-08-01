@@ -11,7 +11,7 @@ public class UDPClient implements Runnable {
 	/**
 	 * UDP packet size, in bytes
 	 */
-	public static final int UDP_PACKET_MAX_BYTE_LENGTH = 700;
+	public static final int UDP_PACKET_MAX_BYTE_LENGTH = 650;
 	
 	private final ClientController clientController;
 	

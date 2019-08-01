@@ -320,7 +320,14 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				postStatus("Game is full!", Color.YELLOW, 0.5f, 0.4f);
 			}
 		} else if (gameState == GameState.IN_GAME) {
-			
+			if (header.equals("d")) { //A rectangle has been destroyed
+				String[] fields = body.split(":");
+				float x = Float.parseFloat(fields[0]);
+				float y = Float.parseFloat(fields[1]);
+				int color = Integer.parseInt(fields[2]);
+				
+				game.gameWorld.removeRectangleIfExists(Rectangle.createIdentifier(x, y, color), false);
+			}
 		}
 	}
 	
@@ -1046,14 +1053,14 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		case JOINING_GAME:
 		case HOSTING_GAME:
 		case WAITING_FOR_GAME_START:
-			int pointsReceived = mainMenuBackgroundWorld.checkClick(e.getX()/(float)getWidth(), e.getY()/(float)getHeight());
+			int pointsReceived = mainMenuBackgroundWorld.checkClick(e.getX()/(float)getWidth(), e.getY()/(float)getHeight()).points;
 			points += pointsReceived;
 			break;
 		case IN_GAME:
 			float x = e.getX()/(float)getWidth();
 			float y = e.getY()/(float)getHeight();
 			
-			tcpClient.sendString("c " + x + ":" + y);
+			tcpClient.sendString("c l:" + x + ":" + y + " a:" + game.gameWorld.timeFrame);
 			break;
 		default:
 			break;
