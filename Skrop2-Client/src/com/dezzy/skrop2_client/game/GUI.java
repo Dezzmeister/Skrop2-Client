@@ -10,7 +10,6 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
@@ -45,6 +44,7 @@ import javax.swing.text.StyledDocument;
 import com.dezzy.skrop2_client.assets.Config;
 import com.dezzy.skrop2_client.assets.Fonts;
 import com.dezzy.skrop2_client.net.tcp.Client;
+import com.dezzy.skrop2_client.net.udp.UDPClient;
 
 public class GUI extends JFrame implements ComponentListener, MouseListener {
 	
@@ -71,6 +71,8 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	private final Thread clientControllerThread;
 	private Client tcpClient;
 	private Thread tcpThread;
+	private UDPClient udpClient;
+	private Thread udpThread;
 	
 	private Game game;
 	
@@ -117,6 +119,12 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	
 	private String serverName = "";
 	private int gamePort = -1;
+	private String gameIP = "";
+	private int udpExceptions = 0;
+	
+	public void processUDPServerEvent(final String event) {
+		System.out.println(event);
+	}
 	
 	public void processServerEvent(final String event) {
 		String header = event.contains(" ") ? event.substring(0, event.indexOf(" ")) : event;
@@ -209,6 +217,25 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				
 				lobbyMenu.addColoredText(playerName + ": ", color);
 				lobbyMenu.addColoredText(messageBody + "\r\n", Color.WHITE);
+			} else if (header.equals("waiting-for-udp")) {
+				try {
+					udpClient = new UDPClient(clientController, gameIP, gamePort);
+					udpThread = new Thread(udpClient, "Skrop 2 UDP Client Thread");
+					udpThread.start();
+					udpExceptions = 0;
+				} catch (Exception e) {
+					e.printStackTrace();
+					udpExceptions++;
+					
+					if (udpExceptions == 3) {
+						tcpClient.sendString("quit");
+						tcpClient.stop();
+						gameState = GameState.MAIN_MENU;
+						updateGameState();
+						postStatus("3 consecutive UDP errors occurred!", Color.RED, 0.5f, 0.4f);
+						udpExceptions = 0;
+					}
+				}
 			}
 		} else if (gameState == GameState.HOSTING_GAME) {
 			if (header.equals("server-info")) {
@@ -235,6 +262,16 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 							gameState = GameState.HOST_MENU;
 							updateGameState();
 							postStatus("Game already running on this server!", Color.YELLOW, 0.5f, 0.4f);
+						}
+					} else if (fieldHeader.equals("open-ports")) {
+						int ports = Integer.parseInt(fieldBody);
+						
+						if (hostMenu.maxPlayers() > ports) {
+							tcpClient.sendString("quit");
+							tcpClient.stop();
+							gameState = GameState.HOST_MENU;
+							updateGameState();
+							postStatus("Server only supports up to " + ports + " players!", Color.YELLOW, 0.5f, 0.4f);
 						}
 					}
 				}
@@ -356,6 +393,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			
 			try {
 				tcpClient = new Client(clientController, joinMenu.fields.ipEntry(), joinMenu.fields.portEntry()); //IP and port have already been validated
+				gameIP = joinMenu.fields.ipEntry();
 				tcpThread = new Thread(tcpClient, "Skrop 2 TCP Client Thread");
 				tcpThread.start();
 				tcpClient.sendString("server-info-request");
@@ -375,6 +413,8 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			
 			try {
 				tcpClient = new Client(clientController, hostMenu.infoserverFields.ipEntry(), hostMenu.infoserverFields.portEntry());
+				gameIP = hostMenu.infoserverFields.ipEntry();
+				
 				tcpThread = new Thread(tcpClient, "Skrop 2 TCP Client Thread");
 				tcpThread.start();
 				tcpClient.sendString("server-info-request");
@@ -391,7 +431,11 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			revalidate();
 			
 			try {
-				tcpClient = new Client(clientController, joinMenu.fields.ipEntry(), gamePort);
+				udpClient = new UDPClient(clientController, gameIP, gamePort);
+				udpThread = new Thread(udpClient, "Skrop 2 UDP Client Thread");
+				udpThread.start();
+				
+				tcpClient = new Client(clientController, gameIP, gamePort);
 				tcpThread = new Thread(tcpClient, "Skrop 2 TCP Client Thread");
 				tcpThread.start();
 				tcpClient.sendString("init-player name:" + Config.name + " color:" + Config.color);
@@ -864,39 +908,40 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				g2.setFont(harambe40);
 				
 				if (game != null && game.players != null) {
+					
 					for (int i = 0; i < game.players.length; i++) {
 						g2.setColor(game.players[i].color);
-						placeTextAt(game.players[i].name, getWidth()/16, (getHeight()/16) + ((i + 1) * 50), g);
+						placeTextAt(game.players[i].name, getWidth()/16, (getHeight()/16) + ((i + 1) * 50), g, true);
 					}
 					
-					g2.setColor(Color.BLUE);
-					placeTextAt(game.players.length + "/" + game.maxPlayers, getWidth()/16, (getHeight()/16) + ((game.players.length + 2) * 50), g);
+					g2.setColor(Color.ORANGE);
+					placeTextAt(game.players.length + "/" + game.maxPlayers + " players", getWidth()/16, (getHeight()/16) + ((game.players.length + 2) * 50), g, true);
 				}
 			}
 			
 			g.setColor(Color.RED);
 			g.setFont(harambe40);
 			
-			placeTextAt("" + points, getWidth()/16, getHeight()/16, g);
+			placeTextAt("" + points, getWidth()/16, getHeight()/16, g, false);
 			
 			g.setColor(Color.GREEN);
 			g.setFont(harambe100);
 			
-			placeTextAt("SKROP 2", getWidth()/2, getHeight()/16, g);
+			placeTextAt("SKROP 2", getWidth()/2, getHeight()/16, g, false);
 			
 			if (showStatus) {
 				g.setColor(statusColor);
 				g.setFont(harambe40);
 				
-				placeTextAt(status, (int)(statusXPos * getWidth()), (int)(statusYPos * getHeight()), g);
+				placeTextAt(status, (int)(statusXPos * getWidth()), (int)(statusYPos * getHeight()), g, false);
 			}
 		}
 	}
 	
-	private void placeTextAt(final String text, int x, int y, final Graphics g) {
+	private void placeTextAt(final String text, int x, int y, final Graphics g, boolean leftAlign) {
 		FontMetrics metrics = g.getFontMetrics();
 		
-		int xPos = x - (metrics.stringWidth(text)/2);
+		int xPos = leftAlign ? x : x - (metrics.stringWidth(text)/2);
 		int yPos = y - (metrics.getHeight() / 2) + metrics.getAscent();
 		
 		if (y < metrics.getHeight()) {

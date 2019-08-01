@@ -1,7 +1,7 @@
 package com.dezzy.skrop2_client.game;
 
 /**
- * This class relays messages from the TCP client to the game so that the game can process messages while the client is closing a connection (sending "quit").
+ * This class relays messages from the TCP and UDP clients to the game so that the game can process messages while the TCP client is closing a connection (sending "quit").
  * Without a way to process server messages asynchronously, the client needs to wait for {@link GUI#processServerEvent} to return
  * before closing a connection. The problem is that there are cases when {@link GUI#processServerEvent} will try to shut down the client
  * and must do so before returning (so that it can start a new connection). Without this relay system, a a deadlock occurs and the client thread can't
@@ -14,8 +14,11 @@ public class ClientController implements Runnable {
 	private final GUI game;
 	private volatile boolean isRunning = true;
 	
-	private volatile boolean newMessage = false;
-	private volatile String message= "";
+	private volatile boolean newTCPMessage = false;
+	private volatile String tcpMessage = "";
+	
+	private volatile boolean newUDPMessage = false;
+	private volatile String udpMessage = "";
 	
 	ClientController(final GUI _game) {
 		game = _game;
@@ -24,15 +27,25 @@ public class ClientController implements Runnable {
 	@Override
 	public void run() {
 		while (isRunning) {
-			if (newMessage) {
-				game.processServerEvent(message);
-				newMessage = false;
+			if (newTCPMessage) {
+				game.processServerEvent(tcpMessage);
+				newTCPMessage = false;
+			}
+			
+			if (newUDPMessage) {
+				game.processUDPServerEvent(udpMessage);
+				newUDPMessage = false;
 			}
 		}
 	}
 	
-	public void relayMessage(final String _message) {
-		message = _message;
-		newMessage = true;
+	public void relayTCPMessage(final String message) {
+		tcpMessage = message;
+		newTCPMessage = true;
+	}
+	
+	public void relayUDPMessage(final String message) {
+		udpMessage = message;
+		newUDPMessage = true;
 	}
 }

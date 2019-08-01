@@ -39,11 +39,11 @@ public class Client implements Runnable {
 					
 					if (in.equals("quit")) {
 						isRunning = false;
-						clientController.relayMessage("quit");
+						clientController.relayTCPMessage("quit");
 						break;
 					}
 					
-					clientController.relayMessage(in);					
+					clientController.relayTCPMessage(in);					
 				} else {
 					
 					String message = null;
@@ -59,6 +59,7 @@ public class Client implements Runnable {
 					}
 				}
 			}
+			messageQueue.clear();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
