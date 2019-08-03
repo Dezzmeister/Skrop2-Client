@@ -24,6 +24,7 @@ public class Client implements Runnable {
 		messageQueue = new ConcurrentLinkedQueue<String>();
 		
 		socket = new Socket(ip, port);
+		socket.setTcpNoDelay(true);
 	}
 	
 	@Override
@@ -36,6 +37,7 @@ public class Client implements Runnable {
 			while (isRunning || !messageQueue.isEmpty()) {				
 				if (din.ready()) {
 					in = din.readLine();
+					//System.out.println("in: " + in);
 					
 					if (in.equals("quit")) {
 						isRunning = false;
@@ -47,14 +49,15 @@ public class Client implements Runnable {
 				} else {
 					
 					String message = null;
-					boolean send = false;
 					
+					String out = "";					
 					while ((message = messageQueue.poll()) != null) {
-						dout.println(message);
-						send = true;
+						out += message + "\r\n";
 					}
 					
-					if (send) {
+					if (!out.isEmpty()) {
+						dout.println(out.trim());
+						//System.out.println("out: " + out);
 						dout.flush();
 					}
 				}

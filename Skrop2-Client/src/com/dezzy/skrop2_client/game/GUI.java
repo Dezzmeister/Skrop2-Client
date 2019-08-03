@@ -77,6 +77,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 	private Thread udpThread;
 	
 	private Game game;
+	private Thread gameThread;
 	
 	private GameState gameState = GameState.MAIN_MENU;
 	
@@ -128,7 +129,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		
 		if (gameState == GameState.IN_GAME) {
 			if (game != null) {
-				game.setGameWorld(event);
+				//game.setGameWorld(event);
 			}
 		}
 	}
@@ -137,7 +138,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		String header = event.contains(" ") ? event.substring(0, event.indexOf(" ")) : event;
 		String body = event.substring(event.indexOf(" ") + 1);
 		
-		System.out.println(event);
+		//System.out.println(event);
 		
 		if (header.equals("timeout")) {
 			postStatus("You have timed out!", Color.RED, 0.5f, 0.4f);
@@ -169,6 +170,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				}
 			} else if (header.equals("game-info")) {
 				game = new Game(body);
+				
 				tcpClient.sendString("join-game");
 			} else if (header.equals("port")) {
 				gamePort = Integer.parseInt(body);
@@ -326,7 +328,9 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				float y = Float.parseFloat(fields[1]);
 				int color = Integer.parseInt(fields[2]);
 				
-				game.gameWorld.removeRectangleIfExists(Rectangle.createIdentifier(x, y, color), false);
+				game.gameWorld.destroyRectangle(Rectangle.createIdentifier(x, y, color));
+			} else if (header.equals("r")) { //A rectangle has been added
+				game.addRectangle(body);
 			}
 		}
 	}
@@ -396,6 +400,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		switch(gameState) {
 		case MAIN_MENU:
 			if (game != null) {
+				game.stop();
 				setContentPane(mainMenuBackground);
 				getContentPane().setLayout(new BorderLayout());
 			}
@@ -459,6 +464,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			break;
 		case WAITING_FOR_GAME_START:
 			if (game != null) {
+				game.stop();
 				setContentPane(mainMenuBackground);
 				getContentPane().setLayout(new BorderLayout());
 			}
@@ -487,6 +493,11 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 			setContentPane(game);
 			getContentPane().setLayout(new BorderLayout());
 			revalidate();
+			
+			game.start();
+			gameThread = new Thread(game, "Skrop 2 Game Predictor Thread");
+			gameThread.start();
+			
 			break;
 		}
 	}

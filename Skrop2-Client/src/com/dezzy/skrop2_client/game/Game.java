@@ -10,9 +10,9 @@ import java.util.Base64;
 import javax.swing.JPanel;
 
 import com.dezzy.skrop2_server.game.skrop2.Rectangle;
-import com.dezzy.skrop2_server.game.skrop2.World;
+import com.dezzy.skrop2_server.game.skrop2.PassiveWorld;
 
-public class Game extends JPanel {
+public class Game extends JPanel implements Runnable {
 	/**
 	 * 
 	 */
@@ -24,7 +24,9 @@ public class Game extends JPanel {
 	public final int winConditionArg;
 	public final int maxPlayers;
 	
-	public World gameWorld;
+	public PassiveWorld gameWorld;
+	
+	private volatile boolean isRunning = true;
 	
 	public Game(final String gameCreationInfo) {
 		setLayout(null);
@@ -57,6 +59,38 @@ public class Game extends JPanel {
 		winCondition = tempWinCondition;
 		winConditionArg = tempWinConditionArg;
 		maxPlayers = tempMaxPlayers;
+		
+		gameWorld = new PassiveWorld(10);
+	}
+	
+	/**
+	 * Measured in Hz
+	 */
+	private static final int LOCAL_GAME_TICK_FREQUENCY = 30;
+	private long lastGameTick = 0;
+	
+	@Override
+	public void run() {
+		while (isRunning) {
+			if (System.currentTimeMillis() - lastGameTick > 1000/LOCAL_GAME_TICK_FREQUENCY) {
+				gameTick();
+				lastGameTick = System.currentTimeMillis();
+			}
+		}
+	}
+	
+	private void gameTick() {
+		if (gameWorld != null) {
+			gameWorld.update();
+		}
+	}
+	
+	public void start() {
+		isRunning = true;
+	}
+	
+	public void stop() {
+		isRunning = false;
 	}
 	
 	@Override
@@ -76,19 +110,9 @@ public class Game extends JPanel {
 		}
 	}
 	
-	public void setGameWorld(final String serializedWorld) {
-		byte[] bytes = Base64.getDecoder().decode(serializedWorld);
-	
-		try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
-			 ObjectInputStream ois = new ObjectInputStream(bais)) {
-			gameWorld = (World) ois.readObject();
-		} catch (Exception e) {
-			System.err.println("Error parsing game information from the UDP server!");
-			e.printStackTrace();
+	public void addRectangle(final String encodedRectangle) {
+		if (gameWorld != null) {
+			gameWorld.addRectangle(Rectangle.decode(encodedRectangle));
 		}
-	}
-	
-	public synchronized void invalidateGameWorld() {
-		gameWorld = null;
 	}
 }
