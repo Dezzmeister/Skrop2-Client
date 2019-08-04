@@ -120,6 +120,7 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 		clientControllerThread.start();
 	}
 	
+	@SuppressWarnings("unused")
 	private String serverName = "";
 	private int gamePort = -1;
 	private String gameIP = "";
@@ -218,7 +219,6 @@ public class GUI extends JFrame implements ComponentListener, MouseListener {
 				String messageBody = body.substring(body.indexOf(":") + 1).replace('_', ' ');
 				Color color = Color.WHITE;
 				
-				System.out.println("game.players.length: " + game.players.length);
 				for (Player player : game.players) {
 					if (player.name.equals(playerName)) {
 						color = player.color;

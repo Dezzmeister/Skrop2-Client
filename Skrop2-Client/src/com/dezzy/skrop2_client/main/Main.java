@@ -23,5 +23,4 @@ public class Main {
 			}
 		}, 0, 1500);		
 	}
-
 }

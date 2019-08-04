@@ -3,14 +3,11 @@ package com.dezzy.skrop2_client.game;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.io.ByteArrayInputStream;
-import java.io.ObjectInputStream;
-import java.util.Base64;
 
 import javax.swing.JPanel;
 
-import com.dezzy.skrop2_server.game.skrop2.Rectangle;
 import com.dezzy.skrop2_server.game.skrop2.PassiveWorld;
+import com.dezzy.skrop2_server.game.skrop2.Rectangle;
 
 public class Game extends JPanel implements Runnable {
 	/**
