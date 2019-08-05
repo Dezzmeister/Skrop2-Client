@@ -12,10 +12,9 @@ public class NetUtils {
 		byte[] inBytes = in.getBytes(StandardCharsets.UTF_8);
 		List<Byte> output = new ArrayList<Byte>();
 		
-		byte[] randomizer = getRandomStringInRange(8, (byte)0, (byte)3).getBytes();
+		byte[] randomizer = getRandomBytes(8);
 		for (byte b : randomizer) {
 			output.add(b);
-			System.out.println("randomizer: " + b);
 		}
 		
 		if (inBytes.length > keyBytes.length || inBytes.length == 0 || keyBytes.length == 0) {
@@ -25,12 +24,11 @@ public class NetUtils {
 			for (int i = 0; i < inBytes.length; i++) {
 				
 				if (count % 3 == 0) {
-					output.add(wrapAdd((byte)((Math.random() * 255) - 128), randomizer[count % randomizer.length]));
+					output.add((byte)((Math.random() * 255) - 128));
 					count++;
 				}
 				
-				output.add(wrapAdd((byte)(inBytes[i] ^ keyBytes[i]), randomizer[count % randomizer.length]));
-				System.out.println((count % randomizer.length) + " added: " + output.get(output.size() - 1));
+				output.add(rotateLeft((byte)(inBytes[i] ^ keyBytes[i]), randomizer[count % randomizer.length] & 0x07));
 				count++;
 			}
 		}
@@ -43,16 +41,6 @@ public class NetUtils {
 		return Base64.getEncoder().encodeToString(outBytes);
 	}
 	
-	private static final byte wrapAdd(byte a, byte b) {
-		if (a + b == Byte.MAX_VALUE + 1) {
-			return Byte.MIN_VALUE;
-		} else if (a + b > Byte.MAX_VALUE) {
-			return (byte)(Byte.MIN_VALUE + a + b - Byte.MAX_VALUE);
-		}
-		
-		return (byte)(a + b);
-	}
-	
 	public static final String decrypt(final String in, final String key) {
 		byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
 		byte[] allInBytes = Base64.getDecoder().decode(in.getBytes(StandardCharsets.UTF_8));
@@ -63,8 +51,7 @@ public class NetUtils {
 		byte[] randomizer = new byte[8];
 		
 		for (int i = 0; i < randomizer.length; i++) {
-			randomizer[i] = inBytes[i];
-			System.out.println("randomizer: " + randomizer[i]);
+			randomizer[i] = allInBytes[i];
 		}
 		
 		System.arraycopy(allInBytes, 8, inBytes, 0, inBytes.length);
@@ -72,7 +59,7 @@ public class NetUtils {
 		int garbageCount = 0;
 		for (int i = 0; i < inBytes.length; i++) {
 			if (i % 3 != 0) {
-				byte inByte = wrapAdd(inBytes[i], (byte)-randomizer[(i + garbageCount) % randomizer.length]);
+				byte inByte = rotateRight(inBytes[i], randomizer[i % randomizer.length] & 0x07);
 				
 				output.add((byte)(keyBytes[i - garbageCount] ^ inByte));
 			} else {
@@ -95,7 +82,7 @@ public class NetUtils {
 		
 		byte rotated = (byte) (b << 1);
 		if ((b & 0x80) >>> 7 == 1) {
-			rotated += 1;
+			rotated |= 1;
 		}
 		
 		return rotateLeft(rotated, times - 1);
@@ -106,12 +93,12 @@ public class NetUtils {
 			return b;
 		}
 		
-		byte rotated = (byte) (b >>> 1);
+		byte rotated = (byte) ((b >>> 1) & 0x7F);
 		if ((b & 0x01) == 1) {
 			rotated |= 0x80;
 		}
 		
-		return rotated;
+		return rotateRight(rotated, times - 1);
 	}
 	
 	public static final String getRandomStringInRange(int length, byte min, byte max) {
@@ -131,4 +118,13 @@ public class NetUtils {
 		
 		return new String(out, StandardCharsets.UTF_8);
 	}
+	
+	private static final byte[] getRandomBytes(int len) {
+	        byte[] out = new byte[len];
+		    for (int i = 0; i < out.length; i++) {
+			      out[i] = (byte)((Math.random() * 255) - 128);
+		    }
+		    
+		    return out;
+      }
 }
